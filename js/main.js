@@ -25,7 +25,8 @@ window.onload = function() {
         game.load.image( 'alert', 'assets/Sign.png');
         
         // loads sound
-        game.load.audio( 'castSound', 'assets/magicshot.mp3');
+        game.load.audio( 'blastSound', 'assets/cannonshot.wav');
+        game.load.audio( 'roarSound', 'assets/roar.wav');
         game.load.audio( 'backgroundMusic', 'assets/AnimalCrossing-TownHall.ogg');
     }
     
@@ -35,13 +36,22 @@ window.onload = function() {
     //player sprite
     var player;
     
-    //controls enemy creation
+    //pirate ships and variables to control creation
     var enemies;
     var enemyTimer = 2200;
     var nextEnemy = 0;
     var enemyCount = 0;
     var minEnemyTimer = 700;
+    //var nextEnemyFire = 0;
+    //var enemyFireRate = 1000;
     
+    //the sea serpent/leviathan/giant monster
+    var seaSerpent;
+    var serpentTimer = 15000;
+    var nextSerpent = 0;
+    var warning;
+    var warnTimer = 2000;
+    var warnDisappear = 0;
     
     //player's current score
     var score;
@@ -60,6 +70,7 @@ window.onload = function() {
     var fx;
     var music;
     var coinfx;
+    var roar;
     
     //related to firing
     var cannons;
@@ -72,11 +83,13 @@ window.onload = function() {
         // creates background
         world = game.add.tileSprite(0, 0, 1200, 800, 'world');
         
+        
         // creates player sprite, and enables physics for player
         player = game.add.sprite( game.world.centerX, game.world.centerY, 'player');
-        player.anchor.setTo( 0.5, 0.5 );
-        game.physics.enable( player, Phaser.Physics.ARCADE );
+        player.anchor.setTo(0.5, 0.5);
+        game.physics.enable(player, Phaser.Physics.ARCADE );
         player.body.collideWorldBounds = true;
+        
         
         // adds cannonballs (to be used by player and enemies
         cannons = game.add.group();
@@ -99,21 +112,36 @@ window.onload = function() {
         enemies.setAll('outOfBoundsKill', true);
         enemies.setAll('checkWorldBounds', true);
         
+        
+        //adds sea serpent and warning indicator (rawr)
+        seaSerpent = game.add.sprite(-10000, -10000, 'monster2');
+        seaSerpent.anchor.setTo(0.5, 0.5);
+        game.physics.enable( seaSerpent, Phaser.Physics.ARCADE );
+        nextSerpent = game.time.now + serpentTimer;
+        
+        warning = game.add.sprite(-9000, -9000, 'alert');
+        warning.alive = false;
+        warning.anchor.setTo(0.5, 0.5);
+        
+        
         // Player controls
         cursors = game.input.keyboard.createCursorKeys();
         fireButton = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
         
+        
         // Adds sound
-        fx = game.add.audio('castSound');
+        fx = game.add.audio('blastSound');
         music = game.add.audio('backgroundMusic', 1, true);
         music.play('', 0, 1, true);
+        roar = game.add.audio('roarSound');
         
         //initializes score and player's health
         score = 0;
         isAlive = true;
         health = 100;
         
-        //creates game over
+        
+        //creates game over font
         style = { font: "65px Arial", fill: "#ff0044", align: "center" };
     }
     
@@ -148,10 +176,14 @@ window.onload = function() {
         
         //controls enemy creation
         createEnemy();
+        summonLeviathan();
+        
         
         //now to check collision
         game.physics.arcade.overlap(cannons, enemies, shotHandler, null, this);
+        game.physics.arcade.overlap(cannons, seaSerpent, invincibleMonster, null, this);
         game.physics.arcade.overlap(enemies, player, monsterHandler, null, this);
+        game.physics.arcade.overlap(seaSerpent, player, leviathanHandler, null, this);
     }
     
     function shoot() {
@@ -192,9 +224,46 @@ window.onload = function() {
         }
     }
     
-    function shotHandler (enemy, bolt) {
+    
+    //controls sea serpent attacks and alerts
+    function summonLeviathan()
+    {
+        if (game.time.now > nextSerpent)
+        {
+            nextSerpent = game.time.now + serpentTimer;
+            warnDisappear = game.time.now + warnTimer;
+            var decision = game.rnd.integer() % 2;
+            var leviathanX = game.rnd.integer() % 1100 + 50;
+            seaSerpent.kill();
+            
+            if(decision === 0)
+            {
+                seaSerpent.reset(leviathanX, -1200); 
+                warning.reset(leviathanX, 50);
+                seaSerpent.body.velocity.y = 300;
+                seaSerpent.angle = 180;
+            }
+            else
+            {
+                seaSerpent.reset(leviathanX, 2000); 
+                warning.reset(leviathanX, 750);
+                seaSerpent.body.velocity.y = -300;
+                seaSerpent.angle = 0;
+            }
+        }
+        
+        if((warning.alive == true) && (game.time.now > warnDisappear))
+        {
+            warning.kill();
+            roar.play();
+        }
+    }
+    
+    //handles cannonfire to enemy ships
+    function shotHandler(enemy, bullet)
+    {
 
-        bolt.kill();
+        bullet.kill();
         enemy.kill();
         score += 50;
     }
@@ -210,6 +279,18 @@ window.onload = function() {
         {
             defeat();
         }
+    }
+    
+    //handles sea serpent to player collsion (instant death)
+    function leviathanHandler(player, enemy)
+    {
+        defeat();
+    }
+    
+    //handles cannonfire to the leviathan (no damage)
+    function invincibleMonster(enemy, bullet)
+    {
+        bullet.kill();
     }
     
     //handles if the player loses (no victory, game is endless)
