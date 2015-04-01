@@ -13,20 +13,20 @@ window.onload = function() {
     
     "use strict";
     
-    var game = new Phaser.Game( 800, 600, Phaser.AUTO, 'game', { preload: preload, create: create, update: update, render: render } );
+    var game = new Phaser.Game( 1200, 800, Phaser.AUTO, 'game', { preload: preload, create: create, update: update, render: render } );
     
     function preload() {
         // Loads images
-        game.load.image( 'world', 'assets/CloudBackground.png' );
-        game.load.image( 'catinabox', 'assets/KittenFlyer.png');
-        game.load.image( 'monster', 'assets/Bird.png');
-        game.load.image( 'magic', 'assets/Boltshot.png');
-        game.load.image( 'coin', 'assets/Coin.png');
+        game.load.image( 'world', 'assets/OceanBackground.png' );
+        game.load.image( 'player', 'assets/PlayerShip.png');
+        game.load.image( 'monster', 'assets/PirateShip.png');
+        game.load.image( 'cannonball', 'assets/Cannonball.png');
+        game.load.image( 'monster2', 'assets/SeaSerpent.png');
+        game.load.image( 'alert', 'assets/Sign.png');
         
         // loads sound
         game.load.audio( 'castSound', 'assets/magicshot.mp3');
         game.load.audio( 'backgroundMusic', 'assets/AnimalCrossing-TownHall.ogg');
-        game.load.audio( 'coinSound', 'assets/coincollect.ogg');
     }
     
     //background image
@@ -37,15 +37,11 @@ window.onload = function() {
     
     //controls enemy creation
     var enemies;
-    var enemyTimer = 2500;
+    var enemyTimer = 2200;
     var nextEnemy = 0;
     var enemyCount = 0;
-    var minEnemyTimer = 100;
+    var minEnemyTimer = 700;
     
-    //controls coin creation
-    var coins;
-    var coinTimer = 1000;
-    var nextCoin = 0;
     
     //player's current score
     var score;
@@ -53,7 +49,7 @@ window.onload = function() {
     //game over message (and player death)
     var lost;
     var style;
-    var lives;
+    var health;
     var isAlive;
     
     //player input
@@ -66,27 +62,32 @@ window.onload = function() {
     var coinfx;
     
     //related to firing
-    var bolts;
+    var cannons;
     var nextFire = 0;
-    var fireRate = 1000;
-    var maxFireRate = 200;
+    var fireRate = 500;
     
     function create() {
         game.physics.startSystem(Phaser.Physics.ARCADE);
         
-        // creates background, player, and monsters
-        world = game.add.tileSprite(0, 0, 800, 600, 'world');
-        player = game.add.sprite( game.world.centerX, game.world.centerY, 'catinabox');
+        // creates background
+        world = game.add.tileSprite(0, 0, 1200, 800, 'world');
         
-        // Create a sprite at the center of the screen using the 'logo' image.
-        // Anchor the sprite at its center, as opposed to its top-left corner.
-        // so it will be truly centered.
+        // creates player sprite, and enables physics for player
+        player = game.add.sprite( game.world.centerX, game.world.centerY, 'player');
         player.anchor.setTo( 0.5, 0.5 );
-        
-        // Turn on the arcade physics engine for sprites.
         game.physics.enable( player, Phaser.Physics.ARCADE );
-        // Make it bounce off of the world bounds.
         player.body.collideWorldBounds = true;
+        
+        // adds cannonballs (to be used by player and enemies
+        cannons = game.add.group();
+        cannons.enableBody = true;
+        cannons.physicsBodyType = Phaser.Physics.ARCADE;
+        cannons.createMultiple(50, 'cannonball', 0, false);
+        cannons.setAll('anchor.x', 0.5);
+        cannons.setAll('anchor.y', 0.5);
+        cannons.setAll('outOfBoundsKill', true);
+        cannons.setAll('checkWorldBounds', true);
+        
         
         // adds enemies
         enemies = game.add.group();
@@ -98,27 +99,6 @@ window.onload = function() {
         enemies.setAll('outOfBoundsKill', true);
         enemies.setAll('checkWorldBounds', true);
         
-        
-        // adds energy bullets
-        bolts = game.add.group();
-        bolts.enableBody = true;
-        bolts.physicsBodyType = Phaser.Physics.ARCADE;
-        bolts.createMultiple(30, 'magic', 0, false);
-        bolts.setAll('anchor.x', 0.5);
-        bolts.setAll('anchor.y', 0.5);
-        bolts.setAll('outOfBoundsKill', true);
-        bolts.setAll('checkWorldBounds', true);
-        
-         // adds coins
-        coins = game.add.group();
-        coins.enableBody = true;
-        coins.physicsBodyType = Phaser.Physics.ARCADE;
-        coins.createMultiple(30, 'coin', 0, false);
-        coins.setAll('anchor.x', 0.5);
-        coins.setAll('anchor.y', 0.5);
-        coins.setAll('outOfBoundsKill', true);
-        coins.setAll('checkWorldBounds', true);
-        
         // Player controls
         cursors = game.input.keyboard.createCursorKeys();
         fireButton = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
@@ -127,12 +107,11 @@ window.onload = function() {
         fx = game.add.audio('castSound');
         music = game.add.audio('backgroundMusic', 1, true);
         music.play('', 0, 1, true);
-        coinfx = game.add.audio('coinSound');
         
-        //initializes score and player's 3 lives
+        //initializes score and player's health
         score = 0;
         isAlive = true;
-        lives = 3;
+        health = 100;
         
         //creates game over
         style = { font: "65px Arial", fill: "#ff0044", align: "center" };
@@ -167,24 +146,20 @@ window.onload = function() {
                 shoot();
         }
         
-        //controls coin creation
-        createCoin();
-        
         //controls enemy creation
         createEnemy();
         
         //now to check collision
-        game.physics.arcade.overlap(bolts, enemies, shotHandler, null, this);
+        game.physics.arcade.overlap(cannons, enemies, shotHandler, null, this);
         game.physics.arcade.overlap(enemies, player, monsterHandler, null, this);
-        game.physics.arcade.overlap(coins, player, coinHandler, null, this);
     }
     
     function shoot() {
-        if (game.time.now > nextFire && bolts.countDead() > 0)
+        if (game.time.now > nextFire && cannons.countDead() > 0)
         {
             nextFire = game.time.now + fireRate;
 
-            var bullet = bolts.getFirstExists(false);
+            var bullet = cannons.getFirstExists(false);
 
             bullet.reset(player.x + 30, player.y);
 
@@ -194,29 +169,16 @@ window.onload = function() {
         }
     }
     
-    function createCoin() {
-        if (game.time.now > nextCoin && coins.countDead() > 0)
-        {
-            nextCoin = game.time.now + coinTimer;
-
-            var coin = coins.getFirstExists(false);
-
-            coin.reset(800, game.world.randomY);
-
-            coin.body.velocity.x = -100;
-        }
-    }
-    
     function createEnemy() {
         if (game.time.now > nextEnemy && enemies.countDead() > 0)
         {
             if(enemyTimer > minEnemyTimer)
             {
                 enemyCount += 1;
-                if(enemyCount >= 5)
+                if(enemyCount >= 10)
                 {
                     enemyCount = 0;
-                    enemyTimer -= 100;
+                    enemyTimer -= 300;
                 }
             }
             
@@ -224,7 +186,7 @@ window.onload = function() {
 
             var enemy = enemies.getFirstExists(false);
 
-            enemy.reset(800, game.world.randomY);
+            enemy.reset(1300, game.world.randomY);
 
             enemy.body.velocity.x = -250;
         }
@@ -237,34 +199,32 @@ window.onload = function() {
         score += 50;
     }
     
+    //handles enemy ship to player collision
     function monsterHandler(player, enemy)
     {
         enemy.kill();
-        if(lives > 0)
-            lives -= 1;
+        if(health > 0)
+            health -= 20;
         
-        if(lives <= 0)
+        if(health <= 0)
         {
-            player.kill();
-            isAlive = false;
-            lost = game.add.text(game.world.centerX, game.world.centerY, "GAME OVER!", style);
-            lost.anchor.setTo( 0.5, 0.5);
+            defeat();
         }
     }
     
-    function coinHandler(player, coin)
+    //handles if the player loses (no victory, game is endless)
+    function defeat()
     {
-        coin.kill();
-        coinfx.play();
-        if(fireRate > maxFireRate)
-            fireRate -= 5;
-        
-        score += 10;
+        player.kill();
+        health = 0;
+        isAlive = false;
+        lost = game.add.text(game.world.centerX, game.world.centerY, "GAME OVER!", style);
+        lost.anchor.setTo( 0.5, 0.5);
     }
     
-    
+    //updates score and health
     function render() {    
-        game.debug.text('Score: ' + score, 32, 580);
-        game.debug.text('Lives: ' + lives, 32, 560);
+        game.debug.text('Score: ' + score, 32, 780);
+        game.debug.text('Health: ' + health, 32, 760);
     }
 };
