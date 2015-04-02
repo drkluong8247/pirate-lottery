@@ -23,11 +23,13 @@ window.onload = function() {
         game.load.image( 'cannonball', 'assets/Cannonball.png');
         game.load.image( 'monster2', 'assets/SeaSerpent.png');
         game.load.image( 'alert', 'assets/Sign.png');
+        game.load.image( 'bird', 'assets/Seagull.png');
         
         // loads sound
         game.load.audio( 'blastSound', 'assets/cannonshot.wav');
         game.load.audio( 'roarSound', 'assets/roar.wav');
         game.load.audio( 'backgroundMusic', 'assets/AnimalCrossing-TownHall.ogg');
+        game.load.audio( 'birdSound', 'assets/Chirp.wav');
     }
     
     //background image
@@ -69,12 +71,14 @@ window.onload = function() {
     var cursors;
     var fireButton;
     var skill1Button;
+    var skill2Button;
     
     //sounds
     var fx;
     var music;
     var coinfx;
     var roar;
+    var caw;
     
     //related to firing
     var cannons;
@@ -94,6 +98,7 @@ window.onload = function() {
     var skill2Ready;
     var skill2Text;
     var skill2Seconds;
+    var seagulls;
     
     function create() {
         game.physics.startSystem(Phaser.Physics.ARCADE);
@@ -155,13 +160,14 @@ window.onload = function() {
         cursors = game.input.keyboard.createCursorKeys();
         fireButton = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
         skill1Button = game.input.keyboard.addKey(Phaser.Keyboard.ONE);
-        
+        skill2Button = game.input.keyboard.addKey(Phaser.Keyboard.TWO);
         
         // Adds sound
         fx = game.add.audio('blastSound');
         music = game.add.audio('backgroundMusic', 1, true);
         music.play('', 0, 1, true);
         roar = game.add.audio('roarSound');
+        caw = game.add.audio('birdSound');
         
         //initializes score and player's health
         score = 0;
@@ -170,12 +176,22 @@ window.onload = function() {
         
         //initializes player's skills
         skill1Ready = true;
-        skill1Text = "Multi-shot:\nREADY";
+        skill1Text = "Multi-shot: READY";
         skill1Seconds = 0;
         
         skill2Ready = true;
-        skill2Text = "Seagull Frenzy:\nREADY";
+        skill2Text = "Seagull Frenzy: READY";
         skill2Seconds = 0;
+        
+        //adds seagulls (for skill 2)
+        seagulls = game.add.group();
+        seagulls.enableBody = true;
+        seagulls.physicsBodyType = Phaser.Physics.ARCADE;
+        seagulls.createMultiple(30, 'bird', 0, false);
+        seagulls.setAll('anchor.x', 0.5);
+        seagulls.setAll('anchor.y', 0.5);
+        seagulls.setAll('outOfBoundsKill', true);
+        seagulls.setAll('checkWorldBounds', true);
         
         //creates game over font
         style = { font: "65px Arial", fill: "#ff0044", align: "center" };
@@ -217,6 +233,12 @@ window.onload = function() {
                 skill1();
         }
         
+        //controls player skills
+        if ((skill2Button.isDown) && isAlive)
+        {
+                skill2();
+        }
+        
         //controls enemy creation
         createEnemy();
         summonLeviathan();
@@ -225,6 +247,7 @@ window.onload = function() {
         //now to check collision
         game.physics.arcade.overlap(cannons, enemies, shotHandler, null, this);
         game.physics.arcade.overlap(eCannons, player, cannonHandler, null, this);
+        game.physics.arcade.overlap(seagulls, enemies, seagullHandler, null, this);
         game.physics.arcade.overlap(enemies, player, monsterHandler, null, this);
         game.physics.arcade.overlap(seaSerpent, player, leviathanHandler, null, this);
         game.physics.arcade.overlap(cannons, seaSerpent, invincibleMonster, null, this);
@@ -268,17 +291,40 @@ window.onload = function() {
             skill1Ready = false;
 
             var bullet = cannons.getFirstExists(false);
-            bullet.reset(player.x + 30, player.y-40);
+            bullet.reset(player.x + 30, player.y);
             bullet.body.velocity.x = 400;
             var bullet2 = cannons.getFirstExists(false);
             bullet2.reset(player.x + 30, player.y);
             bullet2.body.velocity.x = 400;
+            bullet2.body.velocity.y = 50;
             var bullet3 = cannons.getFirstExists(false);
-            bullet3.reset(player.x + 30, player.y+40);
+            bullet3.reset(player.x + 30, player.y);
             bullet3.body.velocity.x = 400;
+            bullet3.body.velocity.y = -50;
             
             fx.play();
         }
+    }
+    
+    //player's first special skill (a multi-shot)
+    function skill2()
+    {
+        if (skill2Ready)
+        {
+            skill2Timer = game.time.now + skill2Cooldown;
+            skill2Ready = false;
+            
+            seagulls.forEach(divebomb, this);
+            caw.play();
+        }
+    }
+    
+    function divebomb(seagull)
+    {
+        var randomX = game.rnd.integer() % 100;
+        seagull.kill();
+        seagull.reset(-50 + randomX, game.world.randomY);
+        seagull.body.velocity.x = 500;
     }
     
     function skillUpdater()
@@ -286,14 +332,30 @@ window.onload = function() {
         if(game.time.now > skill1Timer)
         {
             skill1Ready = true;
-            skill1Text = "Multi-shot:\nREADY";
+            skill1Text = "Multi-shot: READY";
+        }
+        
+        if(game.time.now > skill2Timer)
+        {
+            skill2Ready = true;
+            skill2Text = "Seagull Frenzy: READY";
         }
         
         if(!skill1Ready)
         {
             skill1Seconds = parseInt((skill1Timer - game.time.now) / 1000);
-            skill1Text = "Multi-shot:\n0:0" + skill1Seconds;
+            skill1Text = "Multi-shot: 0:0" + skill1Seconds;
         }
+        
+        if(!skill2Ready)
+        {
+            skill2Seconds = parseInt((skill2Timer - game.time.now) / 1000);
+            if(skill2Seconds < 10)
+                skill2Text = "Seagull Frenzy: 0:0" + skill2Seconds;
+            else
+                skill2Text = "Seagull Frenzy: 0:" + skill2Seconds;
+        }
+            
     }
     
     //controls enemy firing
@@ -380,6 +442,15 @@ window.onload = function() {
         score += 50;
     }
     
+    //handles seagull attacking enemy ships
+    function seagullHandler(enemy, seagull)
+    {
+        seagull.kill();
+        enemy.kill();
+        score += 50;
+    }
+    
+    //handles enemy cannonfire to the player
     function cannonHandler(player, bullet)
     {
         bullet.kill()
@@ -435,5 +506,6 @@ window.onload = function() {
         game.debug.text('Score: ' + score, 32, 780);
         game.debug.text('Health: ' + health, 32, 760);
         game.debug.text(skill1Text, 500, 760);
+        game.debug.text(skill2Text, 500, 775);
     }
 };
