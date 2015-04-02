@@ -42,8 +42,11 @@ window.onload = function() {
     var nextEnemy = 0;
     var enemyCount = 0;
     var minEnemyTimer = 700;
-    //var nextEnemyFire = 0;
-    //var enemyFireRate = 1000;
+    
+    //controls enemy ship firing
+    var eCannons;
+    var nextEnemyFire = 0;
+    var enemyFireRate = 1500;
     
     //the sea serpent/leviathan/giant monster
     var seaSerpent;
@@ -65,6 +68,7 @@ window.onload = function() {
     //player input
     var cursors;
     var fireButton;
+    var skill1Button;
     
     //sounds
     var fx;
@@ -76,6 +80,20 @@ window.onload = function() {
     var cannons;
     var nextFire = 0;
     var fireRate = 500;
+    
+    
+    //related to skills
+    var skill1Cooldown = 3000;
+    var skill1Timer = 0;
+    var skill1Ready;
+    var skill1Text;
+    var skill1Seconds;
+    
+    var skill2Cooldown = 30000;
+    var skill2Timer = 0;
+    var skill2Ready;
+    var skill2Text;
+    var skill2Seconds;
     
     function create() {
         game.physics.startSystem(Phaser.Physics.ARCADE);
@@ -91,7 +109,7 @@ window.onload = function() {
         player.body.collideWorldBounds = true;
         
         
-        // adds cannonballs (to be used by player and enemies
+        // adds cannonballs (to be used by player)
         cannons = game.add.group();
         cannons.enableBody = true;
         cannons.physicsBodyType = Phaser.Physics.ARCADE;
@@ -101,6 +119,15 @@ window.onload = function() {
         cannons.setAll('outOfBoundsKill', true);
         cannons.setAll('checkWorldBounds', true);
         
+        // adds cannonballs (to be used by enemies)
+        eCannons = game.add.group();
+        eCannons.enableBody = true;
+        eCannons.physicsBodyType = Phaser.Physics.ARCADE;
+        eCannons.createMultiple(50, 'cannonball', 0, false);
+        eCannons.setAll('anchor.x', 0.5);
+        eCannons.setAll('anchor.y', 0.5);
+        eCannons.setAll('outOfBoundsKill', true);
+        eCannons.setAll('checkWorldBounds', true);
         
         // adds enemies
         enemies = game.add.group();
@@ -127,6 +154,7 @@ window.onload = function() {
         // Player controls
         cursors = game.input.keyboard.createCursorKeys();
         fireButton = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
+        skill1Button = game.input.keyboard.addKey(Phaser.Keyboard.ONE);
         
         
         // Adds sound
@@ -140,12 +168,21 @@ window.onload = function() {
         isAlive = true;
         health = 100;
         
+        //initializes player's skills
+        skill1Ready = true;
+        skill1Text = "Multi-shot:\nREADY";
+        skill1Seconds = 0;
+        
+        skill2Ready = true;
+        skill2Text = "Seagull Frenzy:\nREADY";
+        skill2Seconds = 0;
         
         //creates game over font
         style = { font: "65px Arial", fill: "#ff0044", align: "center" };
     }
     
-    function update() {
+    function update()
+    {
         //controls background movement
         world.tilePosition.x -= 2;
         
@@ -174,6 +211,12 @@ window.onload = function() {
                 shoot();
         }
         
+        //controls player skills
+        if ((skill1Button.isDown) && isAlive)
+        {
+                skill1();
+        }
+        
         //controls enemy creation
         createEnemy();
         summonLeviathan();
@@ -181,12 +224,27 @@ window.onload = function() {
         
         //now to check collision
         game.physics.arcade.overlap(cannons, enemies, shotHandler, null, this);
-        game.physics.arcade.overlap(cannons, seaSerpent, invincibleMonster, null, this);
+        game.physics.arcade.overlap(eCannons, player, cannonHandler, null, this);
         game.physics.arcade.overlap(enemies, player, monsterHandler, null, this);
         game.physics.arcade.overlap(seaSerpent, player, leviathanHandler, null, this);
+        game.physics.arcade.overlap(cannons, seaSerpent, invincibleMonster, null, this);
+        game.physics.arcade.overlap(eCannons, seaSerpent, invincibleMonster, null, this);
+        game.physics.arcade.overlap(enemies, seaSerpent, leviathanEatsAll, null, this);
+        
+        //controls enemy firing
+        if (game.time.now > nextEnemyFire)
+        {
+            enemies.forEachAlive(enemyShoot, this);
+            nextEnemyFire = game.time.now + enemyFireRate;
+        }
+        
+        //updates skill timers
+        skillUpdater();
     }
     
-    function shoot() {
+    //controls player firing
+    function shoot()
+    {
         if (game.time.now > nextFire && cannons.countDead() > 0)
         {
             nextFire = game.time.now + fireRate;
@@ -201,13 +259,68 @@ window.onload = function() {
         }
     }
     
-    function createEnemy() {
+    //player's first special skill (a multi-shot)
+    function skill1()
+    {
+        if (skill1Ready && cannons.countDead() > 2)
+        {
+            skill1Timer = game.time.now + skill1Cooldown;
+            skill1Ready = false;
+
+            var bullet = cannons.getFirstExists(false);
+            bullet.reset(player.x + 30, player.y-40);
+            bullet.body.velocity.x = 400;
+            var bullet2 = cannons.getFirstExists(false);
+            bullet2.reset(player.x + 30, player.y);
+            bullet2.body.velocity.x = 400;
+            var bullet3 = cannons.getFirstExists(false);
+            bullet3.reset(player.x + 30, player.y+40);
+            bullet3.body.velocity.x = 400;
+            
+            fx.play();
+        }
+    }
+    
+    function skillUpdater()
+    {
+        if(game.time.now > skill1Timer)
+        {
+            skill1Ready = true;
+            skill1Text = "Multi-shot:\nREADY";
+        }
+        
+        if(!skill1Ready)
+        {
+            skill1Seconds = parseInt((skill1Timer - game.time.now) / 1000);
+            skill1Text = "Multi-shot:\n0:0" + skill1Seconds;
+        }
+    }
+    
+    //controls enemy firing
+    function enemyShoot(enemy)
+    {
+        var decideShoot = game.rnd.integer() % 5;
+        if((eCannons.countDead() > 0) && (decideShoot < 3))
+        {
+            var bullet = eCannons.getFirstExists(false);
+
+            bullet.reset(enemy.x - 30, enemy.y);
+
+            bullet.body.velocity.x = -400;
+            
+            fx.play();
+        }
+    }
+    
+    //controls creation of enemy ships
+    function createEnemy()
+    {
         if (game.time.now > nextEnemy && enemies.countDead() > 0)
         {
             if(enemyTimer > minEnemyTimer)
             {
                 enemyCount += 1;
-                if(enemyCount >= 10)
+                if(enemyCount >= 5)
                 {
                     enemyCount = 0;
                     enemyTimer -= 300;
@@ -262,18 +375,26 @@ window.onload = function() {
     //handles cannonfire to enemy ships
     function shotHandler(enemy, bullet)
     {
-
         bullet.kill();
         enemy.kill();
         score += 50;
+    }
+    
+    function cannonHandler(player, bullet)
+    {
+        bullet.kill()
+        health -= 10;
+        if(health <= 0)
+        {
+            defeat();
+        }
     }
     
     //handles enemy ship to player collision
     function monsterHandler(player, enemy)
     {
         enemy.kill();
-        if(health > 0)
-            health -= 20;
+        health -= 20;
         
         if(health <= 0)
         {
@@ -293,6 +414,12 @@ window.onload = function() {
         bullet.kill();
     }
     
+    //leviathans are indiscriminating, and eat all ships
+    function leviathanEatsAll(leviathan, enemy)
+    {
+        enemy.kill();
+    }
+    
     //handles if the player loses (no victory, game is endless)
     function defeat()
     {
@@ -307,5 +434,6 @@ window.onload = function() {
     function render() {    
         game.debug.text('Score: ' + score, 32, 780);
         game.debug.text('Health: ' + health, 32, 760);
+        game.debug.text(skill1Text, 500, 760);
     }
 };
